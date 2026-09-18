@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Vault Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#12151C; --surface:#1B2130; --surface2:#232B3D; --line:#2C3549;
+    --gold:#C7A339; --silver:#C4CBD6; --diamond:#8FE1E8; --other:#B08D6A;
+    --text:#EDEAE2; --muted:#8992A6; --danger:#E2685C; --good:#7FBF8F;
+    --font-display:'Fraunces', serif; --font-body:'Inter', system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){ --bg:#F6F4EF; --surface:#FFFFFF; --surface2:#EFEBE2; --line:#DEDACE; --text:#1B1E27; --muted:#6B7280; }
+  }
+  :root[data-theme="light"]{ --bg:#F6F4EF; --surface:#FFFFFF; --surface2:#EFEBE2; --line:#DEDACE; --text:#1B1E27; --muted:#6B7280; }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--text); font-family:var(--font-body); min-height:100vh;}
+  .app{display:none; grid-template-columns:260px 1fr; min-height:100vh;}
+  @media (max-width:760px){ .app{grid-template-columns:1fr;} }
+
+  .sidebar{background:var(--surface); border-right:1px solid var(--line); padding:28px 22px; position:sticky; top:0; height:100vh; overflow-y:auto;}
+  @media (max-width:760px){
+    .sidebar{position:fixed; top:0; left:0; height:100vh; width:82%; max-width:320px; z-index:60; transform:translateX(-100%); transition:transform .2s ease;}
+    .sidebar.open{transform:translateX(0);}
+  }
+  .sidebar-close{display:none; background:none; border:1px solid var(--line); color:var(--muted); border-radius:6px; padding:6px 10px; font-size:.8rem; margin-bottom:14px;}
+  .mobile-topbar{display:none;}
+  @media (max-width:760px){
+    .mobile-topbar{display:flex; align-items:center; gap:12px; padding:14px 18px; background:var(--surface); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:20;}
+    .mobile-topbar .brand{font-family:var(--font-display); font-weight:700; font-size:1.1rem;}
+    .sidebar-close{display:block;}
+  }
+  .sidebar-scrim{display:none;}
+  .sidebar-scrim.open{display:block; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:55;}
+  .brand{font-family:var(--font-display); font-weight:700; font-size:1.5rem;}
+  .brand small{display:block; font-family:var(--font-body); font-weight:500; font-size:.72rem; color:var(--muted); margin-top:4px;}
+  .sync-note{font-size:.72rem; color:var(--muted); margin-top:10px; line-height:1.4; padding:10px 12px; background:var(--surface2); border-radius:6px;}
+  .lock-btn{margin-top:12px; width:100%;}
+
+  .section-label{font-size:.72rem; color:var(--muted); margin:26px 0 10px;}
+  .members{display:flex; flex-direction:column; gap:2px;}
+  .member-row{display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:6px; cursor:pointer; font-size:.9rem;}
+  .member-row:hover{background:var(--surface2);}
+  .member-row.active{background:var(--surface2); font-weight:600;}
+  .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+  .member-row button{margin-left:auto; background:none; border:none; color:var(--muted); cursor:pointer; font-size:.8rem; opacity:0;}
+  .member-row:hover button{opacity:1;}
+  .add-member{display:flex; gap:6px; margin-top:10px;}
+  .add-member input{flex:1; min-width:0;}
+
+  input, select{background:var(--surface2); border:1px solid var(--line); color:var(--text); padding:8px 10px; border-radius:6px; font-family:var(--font-body); font-size:.85rem; width:100%;}
+  input:focus, select:focus{outline:2px solid var(--gold); outline-offset:1px;}
+  button{cursor:pointer; font-family:var(--font-body);}
+  .btn{background:var(--gold); color:#1B1E27; border:none; padding:8px 14px; border-radius:6px; font-weight:600; font-size:.85rem;}
+  .btn:hover{filter:brightness(1.08);}
+  .btn-ghost{background:transparent; border:1px solid var(--line); color:var(--text); padding:7px 13px; border-radius:6px; font-size:.85rem;}
+  .btn-ghost:hover{border-color:var(--gold);}
+
+  main{padding:34px 40px; max-width:920px;}
+  @media (max-width:760px){ main{padding:22px 18px;} }
+
+  .ledger-top{display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:20px; border-bottom:1px solid var(--line); padding-bottom:22px; margin-bottom:26px;}
+  .ledger-top h1{font-family:var(--font-display); font-weight:600; font-size:1.9rem;}
+  .total-value{text-align:right;}
+  .total-value .amount{font-family:var(--font-display); font-size:2.1rem; font-weight:700; color:var(--gold);}
+  .total-value .label{font-size:.75rem; color:var(--muted); margin-top:2px;}
+
+  .rates{display:flex; gap:14px; flex-wrap:wrap; margin-bottom:30px;}
+  .rate-card{background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:12px 16px; flex:1; min-width:150px;}
+  .rate-card label{display:block; font-size:.72rem; color:var(--muted); margin-bottom:6px;}
+  .rate-card input{font-family:var(--font-display); font-weight:600; font-size:1rem;}
+
+  .toolbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:10px; flex-wrap:wrap;}
+  .toolbar h2{font-family:var(--font-display); font-size:1.2rem; font-weight:600;}
+
+  .material-group{margin-bottom:30px;}
+  .material-head{display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:.85rem; color:var(--muted);}
+  .material-head .swatch{width:8px; height:8px; border-radius:2px;}
+  .material-head .sub-total{margin-left:auto; color:var(--text); font-weight:600;}
+
+  .item{background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--gold); border-radius:8px; padding:14px 16px; margin-bottom:8px; display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center;}
+  .item.material-silver{border-left-color:var(--silver);}
+  .item.material-diamond{border-left-color:var(--diamond);}
+  .item.material-other{border-left-color:var(--other);}
+  .item-main .name{font-weight:600; font-size:.96rem;}
+  .item-meta{display:flex; flex-wrap:wrap; gap:4px 12px; font-size:.78rem; color:var(--muted); margin-top:4px;}
+  .item-value{text-align:right; font-family:var(--font-display); font-weight:600; color:var(--gold);}
+  .item-actions{display:flex; gap:8px; margin-top:6px; justify-content:flex-end;}
+  .item-actions button{background:none; border:none; color:var(--muted); font-size:.75rem; text-decoration:underline; padding:0;}
+  .item-actions button:hover{color:var(--text);}
+
+  .empty{color:var(--muted); font-size:.88rem; padding:20px; text-align:center; border:1px dashed var(--line); border-radius:8px;}
+
+  .modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50;}
+  .modal{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:24px; width:100%; max-width:420px; max-height:88vh; overflow-y:auto;}
+  .modal h3{font-family:var(--font-display); font-size:1.2rem; margin-bottom:16px;}
+  .field{margin-bottom:12px;}
+  .field label{display:block; font-size:.75rem; color:var(--muted); margin-bottom:5px;}
+  .field-row{display:flex; gap:10px;}
+  .field-row .field{flex:1;}
+  .modal-actions{display:flex; justify-content:flex-end; gap:10px; margin-top:18px;}
+
+  #lockScreen{position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:100; padding:20px;}
+  .lock-card{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:32px; width:100%; max-width:380px; text-align:center;}
+  .lock-card .icon{font-size:2rem; margin-bottom:10px;}
+  .lock-card h2{font-family:var(--font-display); font-size:1.4rem; margin-bottom:8px;}
+  .lock-card p{font-size:.82rem; color:var(--muted); margin-bottom:18px; line-height:1.5;}
+  .lock-card input{margin-bottom:10px;}
+  .lock-error{color:var(--danger); font-size:.78rem; min-height:16px; margin-bottom:8px;}
+  .lock-card .btn{width:100%; padding:10px;}
+  .lock-loading{color:var(--muted); font-size:.85rem;}
+</style>
+</head>
+<body>
+
+<div id="lockScreen">
+  <div class="lock-card" id="lockCard">
+    <div class="lock-loading">Loading vault…</div>
+  </div>
+</div>
+
+<div class="app" id="appRoot">
+  <div class="sidebar-scrim" id="sidebarScrim" onclick="closeSidebar()"></div>
+  <aside class="sidebar" id="sidebar">
+    <button class="sidebar-close" onclick="closeSidebar()">✕ Close</button>
+    <div class="brand">The Vault Ledger<small>Track what you hold, and where</small></div>
+    <div id="syncNote" class="sync-note">Loading…</div>
+    <button class="btn-ghost lock-btn" onclick="exportVault()">Export & share vault file</button>
+    <button class="btn-ghost lock-btn" onclick="relock()">Lock vault</button>
+
+    <div class="section-label">Family</div>
+    <div class="members" id="memberList"></div>
+    <div class="add-member">
+      <input id="newMemberName" placeholder="Add a member" maxlength="30">
+      <button class="btn-ghost" onclick="addMember()">+</button>
+    </div>
+
+    <div class="section-label">Filter by material</div>
+    <div class="members" id="materialFilter"></div>
+  </aside>
+
+  <main>
+    <div class="mobile-topbar">
+      <button class="btn-ghost" onclick="openSidebar()">☰ Family & filters</button>
+      <div class="brand">The Vault Ledger</div>
+    </div>
+    <div class="ledger-top">
+      <h1 id="viewTitle">Everyone's vault</h1>
+      <div class="total-value">
+        <div class="amount" id="totalValue">AED 0</div>
+        <div class="label">estimated value</div>
+        <div id="totalProfit" style="font-size:.85rem; font-weight:600; margin-top:4px;"></div>
+      </div>
+    </div>
+
+    <div class="rates">
+      <div class="rate-card"><label>Gold rate (AED / gram, 24K)</label><input id="rateGold" type="number" min="0" step="0.01" value="290" oninput="saveRates(); render();"><a href="https://gulfnews.com/gold-forex" target="_blank" rel="noopener" style="font-size:.7rem; color:var(--gold); display:inline-block; margin-top:6px;">Check today's rate ↗</a></div>
+      <div class="rate-card"><label>Silver rate (AED / gram)</label><input id="rateSilver" type="number" min="0" step="0.01" value="3.4" oninput="saveRates(); render();"><a href="https://gulfnews.com/gold-forex" target="_blank" rel="noopener" style="font-size:.7rem; color:var(--silver); display:inline-block; margin-top:6px;">Check today's rate ↗</a></div>
+      <div class="rate-card"><label>Diamond — valued per item</label><div style="color:var(--muted); font-size:.8rem; padding-top:6px;">enter estimated value when adding</div></div>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px; margin:-20px 0 24px; flex-wrap:wrap;">
+      <button class="btn-ghost" onclick="fetchLiveRates()">🔄 Refresh live rate</button>
+      <span id="rateStatus" style="font-size:.75rem; color:var(--muted);"></span>
+    </div>
+
+    <div class="toolbar">
+      <h2>Items</h2>
+      <button class="btn" onclick="openItemModal()">+ Add item</button>
+    </div>
+
+    <div id="groups"></div>
+  </main>
+</div>
+
+<script>
+const PURITY = {
+  gold:[["24K (999)",1],["22K (916)",0.9167],["21K (875)",0.875],["18K (750)",0.75],["14K (585)",0.5833],["9K (375)",0.375]],
+  silver:[["999 Fine",0.999],["958 Britannia",0.958],["925 Sterling",0.925],["800",0.8]]
+};
+const MATERIALS = [
+  {key:'gold', label:'Gold', color:'var(--gold)'},
+  {key:'silver', label:'Silver', color:'var(--silver)'},
+  {key:'diamond', label:'Diamond', color:'var(--diamond)'},
+  {key:'other', label:'Other valuables', color:'var(--other)'}
+];
+let items = [], members = [];
+let activeMemberFilter = null, activeMaterialFilter = null;
+let vaultKey = null;
+
+// ---------- crypto ----------
+function bufToB64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function b64ToBuf(b64){ return Uint8Array.from(atob(b64), c=>c.charCodeAt(0)); }
+async function deriveKey(pass, saltB64){
+  const salt = b64ToBuf(saltB64);
+  const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), {name:'PBKDF2'}, false, ['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2', salt, iterations:150000, hash:'SHA-256'}, km, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
+}
+async function encryptObj(key, obj){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, new TextEncoder().encode(JSON.stringify(obj)));
+  return {iv:bufToB64(iv), ct:bufToB64(ct)};
+}
+async function decryptObj(key, payload){
+  const buf = await crypto.subtle.decrypt({name:'AES-GCM', iv:b64ToBuf(payload.iv)}, key, b64ToBuf(payload.ct));
+  return JSON.parse(new TextDecoder().decode(buf));
+}
+function randomSaltB64(){ return bufToB64(crypto.getRandomValues(new Uint8Array(16))); }
+
+// ---------- meta (salt + canary; not secret, lives alongside data) ----------
+async function getMeta(){
+  const raw = localStorage.getItem('vault_meta_config');
+  return raw ? JSON.parse(raw) : null;
+}
+async function saveMeta(meta){
+  localStorage.setItem('vault_meta_config', JSON.stringify(meta));
+}
+
+// ---------- rates (not sensitive, kept plain) ----------
+function saveRates(){
+  try{
+    localStorage.setItem('vault_rate_gold', document.getElementById('rateGold').value);
+    localStorage.setItem('vault_rate_silver', document.getElementById('rateSilver').value);
+  }catch(e){}
+}
+function loadRates(){
+  const g = localStorage.getItem('vault_rate_gold'), s = localStorage.getItem('vault_rate_silver');
+  if(g) document.getElementById('rateGold').value = g;
+  if(s) document.getElementById('rateSilver').value = s;
+}
+const OZ_TO_GRAM = 31.1034768;
+const USD_TO_AED = 3.6725; // fixed peg
+async function fetchLiveRates(){
+  const status = document.getElementById('rateStatus');
+  if(status) status.textContent = 'Checking live rate…';
+  try{
+    const res = await fetch('https://data-asg.goldprice.org/dbXRates/USD');
+    if(!res.ok) throw new Error('bad response');
+    const data = await res.json();
+    const item = data.items && data.items[0];
+    if(!item) throw new Error('no data');
+    const goldAed = (item.xauPrice * USD_TO_AED) / OZ_TO_GRAM;
+    const silverAed = (item.xagPrice * USD_TO_AED) / OZ_TO_GRAM;
+    document.getElementById('rateGold').value = goldAed.toFixed(2);
+    document.getElementById('rateSilver').value = silverAed.toFixed(2);
+    saveRates();
+    if(status){ status.textContent = 'Live rate — updated just now'; status.style.color = 'var(--good)'; }
+    render();
+    return true;
+  }catch(e){
+    if(status){ status.textContent = "Live rate not reachable here — use the link above, or try this on your own hosted copy"; status.style.color = 'var(--muted)'; }
+    return false;
+  }
+}
+
+// ---------- boot / lock screen (fully local — no account or login needed) ----------
+async function boot(){
+  loadRates();
+  const meta = await getMeta();
+  renderLock(meta ? 'unlock' : 'setup');
+}
+function renderLock(mode){
+  const card = document.getElementById('lockCard');
+  if(mode==='setup'){
+    card.innerHTML = `
+      <div class="icon">🔒</div>
+      <h2>Set a vault passphrase</h2>
+      <p>Everything is encrypted right here in your browser before it's saved on this device — no account or login needed for you or anyone you share this with.</p>
+      <input id="p1" type="password" placeholder="Create a passphrase">
+      <input id="p2" type="password" placeholder="Confirm passphrase">
+      <div class="lock-error" id="lockErr"></div>
+      <button class="btn" onclick="submitLock('setup')">Create & unlock</button>
+      <p style="margin-top:14px; font-size:.75rem;">Have a vault backup someone sent you? <a href="#" onclick="showImportBox(event)" style="color:var(--gold)">Paste it here</a></p>
+      <div id="importBox" style="display:none; margin-top:10px;">
+        <textarea id="importText" placeholder="Paste the backup text here" style="width:100%; height:100px; background:var(--surface2); border:1px solid var(--line); color:var(--text); border-radius:6px; padding:10px; font-size:.72rem; font-family:monospace; resize:vertical; margin-bottom:8px;"></textarea>
+        <button class="btn-ghost" style="width:100%;" onclick="handleImportText()">Load this backup</button>
+      </div>`;
+  } else {
+    card.innerHTML = `
+      <div class="icon">🔒</div>
+      <h2>Enter passphrase</h2>
+      <p>This vault is end-to-end encrypted and lives only on this device. You need the passphrase to open it.</p>
+      <input id="p1" type="password" placeholder="Passphrase">
+      <div class="lock-error" id="lockErr"></div>
+      <button class="btn" onclick="submitLock('unlock')">Unlock</button>`;
+  }
+}
+function showImportBox(e){ e.preventDefault(); document.getElementById('importBox').style.display = 'block'; }
+async function handleImportText(){
+  const raw = document.getElementById('importText').value.trim();
+  if(!raw){ return; }
+  try{
+    const backup = JSON.parse(raw);
+    if(!backup.meta || !backup.items || !backup.members) throw new Error('bad file');
+    await saveMeta(backup.meta);
+    localStorage.setItem('vault_items_enc', JSON.stringify(backup.items));
+    localStorage.setItem('vault_members_enc', JSON.stringify(backup.members));
+    renderLock('unlock');
+    const p = document.getElementById('lockCard').querySelector('p');
+    p.textContent = 'Vault loaded. Enter the passphrase whoever sent it gave you.';
+  }catch(err){ alert('That doesn\'t look like a valid vault backup — make sure you copied the whole block.'); }
+}
+async function submitLock(mode){
+  const err = document.getElementById('lockErr');
+  const p1 = document.getElementById('p1').value;
+  err.textContent = '';
+  if(!p1 || p1.length < 4){ err.textContent = 'Use at least 4 characters.'; return; }
+  if(mode==='setup'){
+    const p2 = document.getElementById('p2').value;
+    if(p1 !== p2){ err.textContent = "Passphrases don't match."; return; }
+    const salt = randomSaltB64();
+    const key = await deriveKey(p1, salt);
+    const canary = await encryptObj(key, {ok:true});
+    await saveMeta({salt, canaryIv:canary.iv, canaryCt:canary.ct});
+    vaultKey = key;
+    unlockSuccess();
+  } else {
+    const meta = await getMeta();
+    if(!meta){ err.textContent = 'Setup not found — refresh the page.'; return; }
+    try{
+      const key = await deriveKey(p1, meta.salt);
+      const check = await decryptObj(key, {iv:meta.canaryIv, ct:meta.canaryCt});
+      if(!check.ok) throw new Error('bad');
+      vaultKey = key;
+      unlockSuccess();
+    }catch(e){ err.textContent = 'Wrong passphrase.'; }
+  }
+}
+function unlockSuccess(){
+  document.getElementById('lockScreen').style.display = 'none';
+  document.getElementById('appRoot').style.display = 'grid';
+  document.getElementById('syncNote').textContent = 'End-to-end encrypted, saved on this device. No login needed — export & share to sync with family.';
+  loadLocalEncrypted();
+  fetchLiveRates();
+}
+function relock(){
+  vaultKey = null; items = []; members = [];
+  document.getElementById('appRoot').style.display = 'none';
+  document.getElementById('lockScreen').style.display = 'flex';
+  getMeta().then(m => renderLock(m ? 'unlock' : 'setup'));
+}
+
+// ---------- data (encrypted at rest, local device only) ----------
+async function loadLocalEncrypted(){
+  const rawI = JSON.parse(localStorage.getItem('vault_items_enc')||'[]');
+  const rawM = JSON.parse(localStorage.getItem('vault_members_enc')||'[]');
+  items = []; members = [];
+  for(const r of rawI){ try{ items.push({id:r.id, ...(await decryptObj(vaultKey, r))}); }catch(e){} }
+  for(const r of rawM){ try{ members.push({id:r.id, ...(await decryptObj(vaultKey, r))}); }catch(e){} }
+  render();
+}
+async function persistItem(item){
+  const payload = await encryptObj(vaultKey, item);
+  let list = JSON.parse(localStorage.getItem('vault_items_enc')||'[]');
+  const idx = list.findIndex(i=>i.id===item.id);
+  const rec = {id:item.id, iv:payload.iv, ct:payload.ct};
+  if(idx>=0) list[idx]=rec; else list.push(rec);
+  localStorage.setItem('vault_items_enc', JSON.stringify(list));
+  const midx = items.findIndex(i=>i.id===item.id);
+  if(midx>=0) items[midx]=item; else items.push(item);
+  render();
+}
+function removeItem(id){
+  let list = JSON.parse(localStorage.getItem('vault_items_enc')||'[]').filter(i=>i.id!==id);
+  localStorage.setItem('vault_items_enc', JSON.stringify(list));
+  items = items.filter(i=>i.id!==id); render();
+}
+async function persistMember(m){
+  const payload = await encryptObj(vaultKey, {name:m.name, color:m.color});
+  let list = JSON.parse(localStorage.getItem('vault_members_enc')||'[]');
+  list.push({id:m.id, iv:payload.iv, ct:payload.ct});
+  localStorage.setItem('vault_members_enc', JSON.stringify(list));
+  members.push(m); renderMembers();
+}
+function removeMemberDb(id){
+  let list = JSON.parse(localStorage.getItem('vault_members_enc')||'[]').filter(m=>m.id!==id);
+  localStorage.setItem('vault_members_enc', JSON.stringify(list));
+  members = members.filter(m=>m.id!==id); renderMembers();
+}
+async function exportVault(){
+  const meta = await getMeta();
+  const items = JSON.parse(localStorage.getItem('vault_items_enc')||'[]');
+  const membersList = JSON.parse(localStorage.getItem('vault_members_enc')||'[]');
+  const backup = {meta, items, members: membersList};
+  const text = JSON.stringify(backup);
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'exportOverlay';
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>Your vault backup</h3>
+      <p style="font-size:.8rem; color:var(--muted); margin-bottom:12px; line-height:1.5;">Copy this whole block and send it to family (WhatsApp, email, Notes — anywhere text can go). It's encrypted, so it's unreadable without your passphrase. They'll paste it into "Import" when they open the vault link.</p>
+      <textarea id="exportText" readonly style="width:100%; height:140px; background:var(--surface2); border:1px solid var(--line); color:var(--text); border-radius:6px; padding:10px; font-size:.72rem; font-family:monospace; resize:vertical;"></textarea>
+      <div class="lock-error" id="exportMsg" style="color:var(--good)"></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="document.getElementById('exportOverlay').remove()">Close</button>
+        <button class="btn" onclick="copyExportText()">Copy to clipboard</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('exportText').value = text;
+}
+async function copyExportText(){
+  const ta = document.getElementById('exportText');
+  ta.select();
+  ta.setSelectionRange(0, 999999);
+  const msg = document.getElementById('exportMsg');
+  try{
+    await navigator.clipboard.writeText(ta.value);
+    msg.textContent = 'Copied — now paste it wherever you\'re sending it.';
+  }catch(e){
+    const ok = document.execCommand('copy');
+    msg.textContent = ok ? 'Copied — now paste it wherever you\'re sending it.' : 'Couldn\'t auto-copy — the text is selected, press Ctrl+C / Cmd+C.';
+  }
+}
+
+// ---------- UI ----------
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function openSidebar(){ document.getElementById('sidebar').classList.add('open'); document.getElementById('sidebarScrim').classList.add('open'); }
+function closeSidebar(){ document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebarScrim').classList.remove('open'); }
+function money(n){ return 'AED ' + Number(n||0).toLocaleString(undefined,{maximumFractionDigits:0}); }
+function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+const PALETTE = ['#C7A339','#8FE1E8','#B08D6A','#7FBF8F','#E2685C','#C4CBD6','#A78BFA'];
+
+function addMember(){
+  const input = document.getElementById('newMemberName');
+  const name = input.value.trim();
+  if(!name) return;
+  persistMember({id:uid(), name, color: PALETTE[members.length % PALETTE.length]});
+  input.value='';
+}
+function renderMembers(){
+  const list = document.getElementById('memberList');
+  list.innerHTML = '';
+  const allRow = document.createElement('div');
+  allRow.className = 'member-row' + (activeMemberFilter===null?' active':'');
+  allRow.innerHTML = `<span class="dot" style="background:var(--muted)"></span> Everyone`;
+  allRow.onclick = ()=>{ activeMemberFilter=null; renderMembers(); render(); closeSidebar(); };
+  list.appendChild(allRow);
+  members.forEach(m=>{
+    const row = document.createElement('div');
+    row.className = 'member-row' + (activeMemberFilter===m.id?' active':'');
+    row.innerHTML = `<span class="dot" style="background:${m.color}"></span> ${escapeHtml(m.name)} <button onclick="event.stopPropagation(); removeMemberDb('${m.id}')">remove</button>`;
+    row.onclick = ()=>{ activeMemberFilter=m.id; renderMembers(); render(); closeSidebar(); };
+    list.appendChild(row);
+  });
+  const sel = document.getElementById('itemMember');
+  if(sel) sel.innerHTML = '<option value="">Unassigned</option>' + members.map(m=>`<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+}
+function renderMaterialFilter(){
+  const wrap = document.getElementById('materialFilter');
+  wrap.innerHTML = '';
+  const allRow = document.createElement('div');
+  allRow.className = 'member-row' + (activeMaterialFilter===null?' active':'');
+  allRow.innerHTML = `<span class="dot" style="background:var(--muted)"></span> All materials`;
+  allRow.onclick = ()=>{ activeMaterialFilter=null; renderMaterialFilter(); render(); closeSidebar(); };
+  wrap.appendChild(allRow);
+  MATERIALS.forEach(m=>{
+    const row = document.createElement('div');
+    row.className = 'member-row' + (activeMaterialFilter===m.key?' active':'');
+    row.innerHTML = `<span class="dot" style="background:${m.color}"></span> ${m.label}`;
+    row.onclick = ()=>{ activeMaterialFilter=m.key; renderMaterialFilter(); render(); closeSidebar(); };
+    wrap.appendChild(row);
+  });
+}
+function itemValue(item){
+  if(item.material==='gold' || item.material==='silver'){
+    const rate = item.material==='gold' ? parseFloat(document.getElementById('rateGold').value||0) : parseFloat(document.getElementById('rateSilver').value||0);
+    return (parseFloat(item.weight)||0) * (parseFloat(item.purityFactor)||1) * rate;
+  }
+  return parseFloat(item.manualValue)||0;
+}
+function itemProfit(item, currentVal){
+  if(item.purchasePrice===null || item.purchasePrice===undefined || item.purchasePrice==='') return null;
+  return currentVal - parseFloat(item.purchasePrice);
+}
+function render(){
+  renderMembers(); renderMaterialFilter();
+  let visible = items.filter(i=>{
+    if(activeMemberFilter && i.memberId!==activeMemberFilter) return false;
+    if(activeMaterialFilter && i.material!==activeMaterialFilter) return false;
+    return true;
+  });
+  document.getElementById('viewTitle').textContent = activeMemberFilter
+    ? (members.find(m=>m.id===activeMemberFilter)?.name || 'Vault') + "\u2019s vault"
+    : "Everyone\u2019s vault";
+  let total = 0, totalProfit = 0, anyProfitTracked = false;
+  const groups = document.getElementById('groups');
+  groups.innerHTML = '';
+  if(visible.length===0) groups.innerHTML = '<div class="empty">Nothing here yet. Add the first item to start the ledger.</div>';
+  MATERIALS.forEach(mat=>{
+    const list = visible.filter(i=>i.material===mat.key);
+    if(list.length===0) return;
+    let subtotal = 0;
+    const g = document.createElement('div');
+    g.className = 'material-group';
+    const head = document.createElement('div');
+    head.className = 'material-head';
+    head.innerHTML = `<span class="swatch" style="background:${mat.color}"></span> ${mat.label} (${list.length}) <span class="sub-total" id="sub-${mat.key}"></span>`;
+    g.appendChild(head);
+    list.forEach(item=>{
+      const val = itemValue(item);
+      subtotal += val; total += val;
+      const profit = itemProfit(item, val);
+      let profitHtml = '';
+      if(profit !== null){
+        anyProfitTracked = true;
+        totalProfit += profit;
+        const isGain = profit >= 0;
+        profitHtml = `<div style="font-size:.75rem; color:${isGain?'var(--good)':'var(--danger)'}; margin-top:2px;">${isGain?'▲ +':'▼ '}${money(Math.abs(profit))} ${isGain?'gain':'loss'} <span style="color:var(--muted)">(bought ${money(item.purchasePrice)})</span></div>`;
+      }
+      const owner = members.find(m=>m.id===item.memberId);
+      const row = document.createElement('div');
+      row.className = 'item material-'+mat.key;
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="name">${escapeHtml(item.name)}</div>
+          <div class="item-meta">
+            ${item.purityLabel ? `<span>${escapeHtml(item.purityLabel)}</span>`:''}
+            ${item.weight ? `<span>${item.weight} ${item.material==='diamond'?'ct':'g'}</span>`:''}
+            <span>📍 ${escapeHtml(item.location||'\u2014')}</span>
+            ${item.fromWhom ? `<span>from ${escapeHtml(item.fromWhom)}</span>`:''}
+            ${owner ? `<span>· ${escapeHtml(owner.name)}</span>`:''}
+            ${item.dateMarked ? `<span>· ${item.dateMarked}</span>`:''}
+          </div>
+          <div class="item-actions">
+            <button onclick="openItemModal('${item.id}')">edit</button>
+            <button onclick="removeItem('${item.id}')">remove</button>
+          </div>
+        </div>
+        <div>
+          <div class="item-value">${money(val)}</div>
+          ${profitHtml}
+        </div>`;
+      g.appendChild(row);
+    });
+    head.querySelector('.sub-total').textContent = money(subtotal);
+    groups.appendChild(g);
+  });
+  document.getElementById('totalValue').textContent = money(total);
+  const profitEl = document.getElementById('totalProfit');
+  if(anyProfitTracked){
+    const gain = totalProfit >= 0;
+    profitEl.style.color = gain ? 'var(--good)' : 'var(--danger)';
+    profitEl.textContent = `${gain?'▲ +':'▼ '}${money(Math.abs(totalProfit))} ${gain?'overall gain':'overall loss'}`;
+  } else {
+    profitEl.textContent = '';
+  }
+}
+
+function openItemModal(id){
+  const item = id ? items.find(i=>i.id===id) : null;
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'modalOverlay';
+  overlay.innerHTML = `
+    <div class="modal">
+      <h3>${item ? 'Edit item' : 'Add an item'}</h3>
+      <div class="field"><label>What is it</label><input id="f_name" placeholder="e.g. Grandmother's bangles" value="${item?escapeHtml(item.name):''}"></div>
+      <div class="field-row">
+        <div class="field"><label>Material</label>
+          <select id="f_material" onchange="onMaterialChange()">
+            ${MATERIALS.map(m=>`<option value="${m.key}" ${item&&item.material===m.key?'selected':''}>${m.label}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field" id="purityField"><label>Purity</label><select id="f_purity"></select></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label id="weightLabel">Weight (grams)</label><input id="f_weight" type="number" step="0.01" min="0" value="${item?item.weight||'':''}"></div>
+        <div class="field" id="valueField" style="display:none"><label>Estimated value (AED)</label><input id="f_value" type="number" step="1" min="0" value="${item?item.manualValue||'':''}"></div>
+      </div>
+      <div class="field"><label>Where it's stored</label><input id="f_location" placeholder="e.g. Home safe, bedroom cupboard" value="${item?escapeHtml(item.location||''):''}"></div>
+      <div class="field"><label>Amount you paid for it (AED) — optional</label><input id="f_purchase" type="number" step="1" min="0" placeholder="e.g. 4200" value="${item?item.purchasePrice||'':''}"></div>
+      <div class="field-row">
+        <div class="field"><label>Received from</label><input id="f_from" placeholder="e.g. Mom, wedding gift" value="${item?escapeHtml(item.fromWhom||''):''}"></div>
+        <div class="field"><label>Belongs to</label><select id="itemMember"></select></div>
+      </div>
+      <div class="field"><label>Date marked</label><input id="f_date" type="date" value="${item?item.dateMarked||new Date().toISOString().slice(0,10):new Date().toISOString().slice(0,10)}"></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn" onclick="submitItem('${item?item.id:''}')">${item?'Save changes':'Add item'}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const sel = document.getElementById('itemMember');
+  sel.innerHTML = '<option value="">Unassigned</option>' + members.map(m=>`<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('');
+  if(item && item.memberId) sel.value = item.memberId;
+  onMaterialChange();
+  if(item) document.getElementById('f_purity').value = item.purityFactor;
+}
+function onMaterialChange(){
+  const mat = document.getElementById('f_material').value;
+  const purityField = document.getElementById('purityField');
+  const purSel = document.getElementById('f_purity');
+  const weightLabel = document.getElementById('weightLabel');
+  const valueField = document.getElementById('valueField');
+  if(mat==='gold' || mat==='silver'){
+    purityField.style.display=''; valueField.style.display='none';
+    purSel.innerHTML = PURITY[mat].map(([l,f])=>`<option value="${f}">${l}</option>`).join('');
+    weightLabel.textContent = 'Weight (grams)';
+  } else {
+    purityField.style.display='none'; valueField.style.display='';
+    weightLabel.textContent = mat==='diamond' ? 'Weight (carats)' : 'Weight (grams, optional)';
+  }
+}
+function closeModal(){ const o=document.getElementById('modalOverlay'); if(o) o.remove(); }
+function submitItem(existingId){
+  const name = document.getElementById('f_name').value.trim();
+  if(!name){ alert('Give the item a name.'); return; }
+  const material = document.getElementById('f_material').value;
+  const isMetal = material==='gold'||material==='silver';
+  const purSel = document.getElementById('f_purity');
+  const item = {
+    id: existingId || uid(), name, material,
+    weight: document.getElementById('f_weight').value || 0,
+    purityFactor: isMetal ? parseFloat(purSel.value) : null,
+    purityLabel: isMetal ? purSel.options[purSel.selectedIndex].text : '',
+    manualValue: !isMetal ? (document.getElementById('f_value').value||0) : null,
+    location: document.getElementById('f_location').value.trim(),
+    purchasePrice: document.getElementById('f_purchase').value || null,
+    fromWhom: document.getElementById('f_from').value.trim(),
+    memberId: document.getElementById('itemMember').value || null,
+    dateMarked: document.getElementById('f_date').value
+  };
+  persistItem(item);
+  closeModal();
+}
+
+boot();
+</script>
+</body>
+</html>
